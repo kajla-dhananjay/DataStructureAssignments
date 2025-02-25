@@ -1,0 +1,10 @@
+.devcontainer
+setup/build/
+.idea/
+.vscode/
+build/
+tmp/
+A1_Sorting/build/
+A1_Sorting/test_failures.log
+A1_Sorting/*.txt
+A1_Sorting/plots/

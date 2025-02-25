@@ -1,0 +1,63 @@
+${COMMENT_OS_SECTION}# Dockerfile OS: debian:bullseye-slim
+${COMMENT_OS_SECTION}FROM debian:bullseye-slim
+
+${DISABLE_ENV_VARIABLE_SECTION}# Setting environment variables
+${DISABLE_ENV_VARIABLE_SECTION}ENV DEBIAN_FRONTEND=noninteractive \
+    ${DISABLE_ENV_VARIABLE_SECTION}WORKSPACE_DIR=/workspaces/warp-drive-experimental \
+    ${DISABLE_ENV_VARIABLE_SECTION}DEV_USER=dev \
+    ${DISABLE_ENV_VARIABLE_SECTION}DEV_PASSWORD=dev
+
+# Updating and upgrading the system
+${DISABLE_INSTALL_PACKAGES}RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+${REQUIRED_PACKAGES_FORMATTED}
+    ${DISABLE_INSTALL_PACKAGES}&& apt-get clean && rm -rf /var/lib/apt/lists/*
+
+${DISABLE_CLANG_SECTION}# Install Clang
+${DISABLE_CLANG_SECTION}RUN wget -qO- https://apt.llvm.org/llvm.sh | bash -s -- ${CLANG_VERSION}
+${DISABLE_CLANG_SECTION}RUN apt-get update && apt-get install -y --no-install-recommends clang-${CLANG_VERSION} clang-tools-${CLANG_VERSION} clang-${CLANG_VERSION}-doc libclang-common-${CLANG_VERSION}-dev libclang-${CLANG_VERSION}-dev libclang1-${CLANG_VERSION} clang-format-${CLANG_VERSION} python3-clang-${CLANG_VERSION} clangd-${CLANG_VERSION} clang-tidy-${CLANG_VERSION}
+${DISABLE_CLANG_SECTION}RUN echo 'alias clang=clang-${CLANG_VERSION}' >> /etc/skel/.bashrc  ; \
+    ${DISABLE_CLANG_SECTION}echo 'alias clang++=clang++-${CLANG_VERSION}' >> /etc/skel/.bashrc ; \
+    ${DISABLE_CLANG_SECTION}echo $(cat /etc/skel/.bashrc);
+
+${DISABLE_PASSWORDLESS_SUDO}# Create user:${USER} and setup passwordless sudo
+${DISABLE_PASSWORDLESS_SUDO}RUN useradd -m -s /bin/bash -G sudo ${USER} && \
+    ${DISABLE_PASSWORDLESS_SUDO}echo "${USER}:${USER}" | chpasswd && \
+    ${DISABLE_PASSWORDLESS_SUDO}echo "${USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+${DISABLE_HARDCODED_WORKSPACE_DIRECTORY}# Create a hardcoded workspace directory
+${DISABLE_HARDCODED_WORKSPACE_DIRECTORY}RUN mkdir -p ${WORKSPACE_DIR} && \
+    ${DISABLE_HARDCODED_WORKSPACE_DIRECTORY}chown -R ${USER}:${USER} ${WORKSPACE_PARENT_DIR}
+
+${DISABLE_SCRIPTS_PATH_BIN}RUN echo 'export PATH="${PATH_NAME}:${WORKSPACE_DIR}/setup/scripts/bin"' >> ${USER_HOME}/${RCFILE}
+
+${DISABLE_PIP_PATH}RUN echo 'export PATH="${PATH_NAME}:${USER_HOME}/.local/bin"' >> ${USER_HOME}/${RCFILE}
+
+${DISABLE_SSH_KEY_COPY}# Prepare SSH keys
+${DISABLE_SSH_KEY_COPY}RUN mkdir -p ${USER_HOME}/.ssh && \
+    ${DISABLE_SSH_KEY_COPY}chown -R ${USER}:${USER} ${USER_HOME}/.ssh
+
+${DISABLE_SSH_KEY_COPY}# Copy the .ssh folder from the build context
+${DISABLE_SSH_KEY_COPY}COPY .ssh ${USER_HOME}/.ssh
+
+${DISABLE_SSH_KEY_COPY}# Fix permissions for SSH keys
+${DISABLE_SSH_KEY_COPY}RUN chown -R ${USER}:${USER} ${USER_HOME}/.ssh && \
+    ${DISABLE_SSH_KEY_COPY}chmod 700 ${USER_HOME}/.ssh && \
+    ${DISABLE_SSH_KEY_COPY}find ${USER_HOME}/.ssh -type f -exec chmod 600 {} \;
+
+${DISABLE_INSTALL_DOCKER}# Section to run docker in the container without sudo
+${DISABLE_INSTALL_DOCKER}RUN sudo usermod -aG docker ${USER} && \
+    ${DISABLE_INSTALL_DOCKER}sudo newgrp docker && \
+    ${DISABLE_INSTALL_DOCKER}sudo chown -R dev:docker /var/run/
+
+${DISABLE_STARTUP_SCRIPT}COPY ./${STARTUP_SCRIPT_NAME} ${USER_HOME}/${STARTUP_SCRIPT_NAME}
+${DISABLE_STARTUP_SCRIPT}RUN sudo chmod +x ${USER_HOME}/${STARTUP_SCRIPT_NAME}
+
+${DISABLE_HOST_CONFIG}COPY ./${HOST_CONFIG_FILE_NAME} ${USER_HOME}/${HOST_CONFIG_FILE_NAME}
+${DISABLE_HOST_CONFIG}RUN sudo chmod +x ${USER_HOME}/${HOST_CONFIG_FILE_NAME}
+
+${DISABLE_USER_WORKSPACE}# Set the dev user and workspace as default
+${DISABLE_USER_WORKSPACE}USER "${USER}"
+${DISABLE_USER_WORKSPACE}WORKDIR "${WORKSPACE_DIR}"
+
+
+${DISABLE_ENTRY_POINT}ENTRYPOINT ["${DOCKER_SHELL_PATH}", "-c", "${USER_HOME}/${STARTUP_SCRIPT_NAME} && /bin/bash"]
